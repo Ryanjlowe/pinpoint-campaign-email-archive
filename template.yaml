@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon Pinpoint Email Archive Campaign Filter.
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  PinpointProjectId:
+    Type: String
+    Description: Amazon Pinpoint Project ID
+
+Resources:
+  PinpointCampaignEmailArchiveFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PinpointCampaignEmailArchive
+      CodeUri: archive-filter/
+      Handler: app.handler
+      Runtime: nodejs12.x
+      Timeout: 300
+      Policies:
+        - Statement:
+          - Sid: PinpointAccess
+            Effect: Allow
+            Action:
+              - mobiletargeting:GetEmailTemplate
+              - mobiletargeting:GetCampaign
+            Resource: !Sub arn:${AWS::Partition}:mobiletargeting:${AWS::Region}:${AWS::AccountId}:*
+
+
+  PinpointInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PinpointCampaignEmailArchiveFunction
+      Principal: !Sub pinpoint.${AWS::Region}.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:mobiletargeting:${AWS::Region}:${AWS::AccountId}:*
+
+
+  PinpointApplicationSettings:
+    Type: AWS::Pinpoint::ApplicationSettings
+    Properties:
+      ApplicationId: !Ref PinpointProjectId
+      CampaignHook:
+        LambdaFunctionName: !GetAtt PinpointCampaignEmailArchiveFunction.Arn
+        Mode: 'FILTER'
+    DependsOn: PinpointInvokePermission
+
+Outputs:
+  PinpointCampaignEmailArchiveFunctionArn:
+    Description: "A function invoked by an Amazon Pinpoint Campaign that will persist the campaign email."
+    Value: !GetAtt PinpointCampaignEmailArchiveFunction.Arn
